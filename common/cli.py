@@ -1,4 +1,7 @@
 import argparse
+import re
+from tabnanny import verbose
+from unittest import result
 from tabulate import tabulate
 from colorama import Fore, Style, init
 
@@ -24,7 +27,6 @@ PORTS = [
     ["3389", "RDP", "Remote Desktop Protocol (TCP/UDP)"]
 ]
 
-
 COMMANDS = [
     ["ping", "All", "Check network connectivity"],
     ["ipconfig", "Windows", "Display network config"],
@@ -39,6 +41,23 @@ WIFI_BANDS = [
     ["5 GHz", "Faster speeds, less interference", "Shorter range, weaker wall penetration"],
     ["6 GHz", "Very high speeds, low latency", "Very short range, new hardware required"]
 ]
+
+IP_TABLE = [
+    ["0.0.0.0", "/8", "Reserved", "Default route or unspecified IP (e.g., bind to all interfaces)"],
+    ["127.0.0.0 – 127.255.255.255", "127.0.0.0/8", "Loopback", "Localhost testing (e.g., 127.0.0.1)"],
+    ["169.254.0.0 – 169.254.255.255", "169.254.0.0/16", "APIPA", "Self-assigned when DHCP fails (e.g., 'No internet')"],
+    ["10.0.0.0 – 10.255.255.255", "10.0.0.0/8", "Private", "Used by routers, WSL1, VirtualBox (host-only)"],
+    ["172.16.0.0 – 172.31.255.255", "172.16.0.0/12", "Private", "Used by Docker, WSL2, Hyper-V, VPN clients"],
+    ["192.168.0.0 – 192.168.255.255", "192.168.0.0/16", "Private", "Most home routers and VMs (e.g., 192.168.1.1)"],
+    ["100.64.0.0 – 100.127.255.255", "100.64.0.0/10", "Shared", "Carrier-grade NAT (used by ISPs and mobile data)"],
+    ["192.0.2.0 – 192.0.2.255", "192.0.2.0/24", "TEST-NET-1", "Reserved for documentation and testing"],
+    ["198.51.100.0 – 198.51.100.255", "198.51.100.0/24", "TEST-NET-2", "Used in training/demos (not routable)"],
+    ["203.0.113.0 – 203.0.113.255", "203.0.113.0/24", "TEST-NET-3", "Used in documentation and tools"],
+    ["224.0.0.0 – 239.255.255.255", "224.0.0.0/4", "Multicast", "Streaming, OSPF, games, and group messaging"],
+    ["240.0.0.0 – 255.255.255.254", "240.0.0.0/4", "Reserved", "For future use (not publicly routable)"],
+    ["255.255.255.255", "/32", "Broadcast", "Broadcast to all hosts on local subnet (e.g., DHCP request)"]
+]
+
 
 WIFI_STANDARDS = [
     ["802.11a", "5 GHz", "54 Mbps", "Rare today"],
@@ -135,7 +154,6 @@ CPU_TYPES = [
 ]
 
 
-
 # Functions
 def print_section_title(title):
     print(Fore.GREEN + Style.BRIGHT + f"\n\n{'=' * 10} {title.upper()} {'=' * 10}\n")
@@ -197,6 +215,334 @@ def show_wifi(keyword=None):
         print(Fore.MAGENTA + "\n🧠 Memory Tricks:\n")
         for tip in WIFI_TRICKS:
             print(Fore.YELLOW + tip)
+
+
+def show_ip_table(keyword=None):
+    print_section_title("Common IP Address Ranges")
+
+    filtered = IP_TABLE
+    if keyword:
+        keyword = keyword.lower()
+        filtered = [
+            row for row in IP_TABLE
+            if any(keyword in str(cell).lower() for cell in row)
+        ]
+
+    headers = [Fore.CYAN + "Range", Fore.CYAN + "CIDR", Fore.CYAN + "Type", Fore.CYAN + "Use / Example"]
+    print(tabulate(filtered, headers=headers, tablefmt="fancy_grid"))
+
+import ipaddress
+
+
+def show_ip_calculator(cidr_input):
+    print_section_title("IP Address Calculator")
+
+    try:
+        # Parse input
+        net = ipaddress.IPv4Interface(cidr_input)
+        network = net.network
+        ip = net.ip
+        mask = network.netmask
+        broadcast = network.broadcast_address
+        total_hosts = network.num_addresses - 2 if network.num_addresses > 2 else network.num_addresses
+
+        first_host = ipaddress.IPv4Address(int(network.network_address) + 1)
+        last_host = ipaddress.IPv4Address(int(network.broadcast_address) - 1)
+
+        headers = ["Field", "Value"]
+        rows = [
+            ["IP Address", str(ip)],
+            ["CIDR Notation", f"/{network.prefixlen}"],
+            ["Subnet Mask", str(mask)],
+            ["Network Address", str(network.network_address)],
+            ["Broadcast Address", str(broadcast)],
+            ["Host Range", f"{first_host} – {last_host}" if total_hosts >= 2 else "N/A"],
+            ["Total Hosts", f"{total_hosts} usable" if total_hosts >= 2 else f"{total_hosts} total"],
+        ]
+
+        print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
+        # Add smart environment summary
+        env_summary = ""
+
+        if network.prefixlen == 32:
+            env_summary = "🔒 This is likely a public Wi-Fi, VPN, or isolated host. No other devices share this subnet."
+        elif network.prefixlen == 24:
+            env_summary = "🏠 This is a common home or small office LAN subnet (e.g., 192.168.x.x/24)."
+        elif network.prefixlen == 16:
+            env_summary = "🏢 This is a large LAN or departmental network (e.g., 172.16.0.0/16)."
+        elif network.prefixlen <= 8:
+            env_summary = "🌐 This is a very large network, possibly enterprise-grade or ISP-level."
+        elif network.prefixlen == 30:
+            env_summary = "🔗 This is often used for point-to-point links, routers, or VPN tunnels."
+        else:
+            env_summary = "ℹ️ This is a custom or uncommon subnet size."
+
+        print(Fore.BLUE + f"\n{env_summary}\n")
+        print(Fore.YELLOW + "\n💡 Tip: Find your IP using 'ip a' (Linux) or 'ipconfig' (Windows) — look for an IPv4 address on eth0 or your active interface.\n")
+
+    except Exception as e:
+        print(Fore.RED + f"\n[!] Invalid input. Please use CIDR notation (e.g., 192.168.1.100/24).")
+        print(Fore.RED + f"Error: {e}\n")
+
+import subprocess
+import platform
+from datetime import datetime
+
+
+def run_diag(verbose=False, log=False):
+
+    import os
+    from datetime import datetime
+
+    results = []
+    log_entries = []
+
+    def log_line(line: str):
+        print(line)
+        log_entries.append(line)
+        
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f"diagnostic_log_{timestamp}.txt") if log else None
+       
+    if verbose:
+        log_line("🔍 DEBUG: Starting diagnostics...")
+
+
+    print("\n" + "="*50)
+    print("💻 COMMON CLI TOOL – DIAGNOSTIC MODE")
+    print("="*50)
+    print("🔍 Running basic system diagnostics...\n")
+    
+    if log or verbose:
+        log_line(f"🕒 Diagnostic run on {timestamp}")
+        log_line("=" * 50)
+
+    gateway = None
+  
+    def get_windows_private_ip_and_interface():
+        try:
+            import re
+            output = subprocess.check_output(["ipconfig"], text=True)
+            blocks = re.split(r"\r?\n\r?\n", output)
+
+            ignore_keywords = [
+                "Virtual", "VMware", "Hyper-V", "Loopback",
+                "TAP", "TUN", "Bluetooth", "vEthernet", "WSL"
+            ]
+
+            candidates = []
+
+            interface_name = "Unknown"
+
+            for block in blocks:
+                block_clean = block.strip()
+                if not block_clean:
+                    continue
+
+                # Track adapter name if found
+                adapter_match = re.search(r"^\s*(.+adapter.+):", block, re.IGNORECASE | re.MULTILINE)
+                if adapter_match:
+                    interface_name = adapter_match.group(1).strip()
+                    if verbose:
+                        log_line(f"✅ Matched adapter line: {interface_name}")
+                    continue  # Move to next block — this block only contains adapter name
+
+                # Look for IPv4 in a separate block
+                match = re.search(r"IPv4 Address[^\:]*:\s*([\d\.]+)", block)
+                if not match:
+                    continue
+
+                ip = match.group(1)
+                if verbose:
+                    log_line(f"🔎 Found adapter: {interface_name} with IP {ip}")
+
+                if "Default Gateway" in block and "0.0.0.0" not in block:
+                    candidates.append((ip, interface_name, True))
+                else:
+                    candidates.append((ip, interface_name, False))
+
+
+            # Prefer adapter with gateway + private IP
+            for ip, name, has_gateway in candidates:
+                if has_gateway and ip.startswith("192.168."):
+                    return ip, name
+
+            # Otherwise return first with a gateway
+            for ip, name, has_gateway in candidates:
+                if has_gateway:
+                    return ip, name
+
+            # Otherwise just return first found
+            if candidates:
+                return candidates[0][0], candidates[0][1]
+
+            return "Not found", "Unknown"
+
+        except Exception as e:
+            return f"Error: {e}", "Unknown"
+
+
+    current_os = platform.system()
+
+    # 1. Public + Private IP address
+    if verbose:
+        log_line("🔍 DEBUG: Checking public and private IP addresses...")
+
+    public_ip = "Unavailable"
+    private_ip = "Unavailable"
+
+    try:
+        # Get public IP from external service
+        public_ip = subprocess.check_output(
+            ["curl", "-s", "https://api.ipify.org"],
+            text=True,
+            stderr=subprocess.STDOUT
+        ).strip()
+    except Exception as e:
+        public_ip = f"Error: {e}"
+
+    try:
+        if current_os == "Windows":
+            private_ip, interface_name = get_windows_private_ip_and_interface()
+            ip_output = f"{private_ip}  [Interface: {interface_name}]"
+
+        else:
+            ip_output = subprocess.check_output(["ifconfig"], text=True)
+            match = re.search(r"inet\s+([\d.]+)\s+netmask", ip_output)
+            private_ip = match.group(1) if match else "Not found"
+            ip_output = private_ip
+
+    except Exception as e:
+        private_ip = f"Error: {e}"
+        ip_output = private_ip  # fallback
+
+    # Compose final message
+    message = f"\n🌍 Public IP: {public_ip}\n🏠 Private IP: {ip_output}"
+    results.append(("Checking IP addresses", True, message))
+  
+
+    # 2. Ping 8.8.8.8
+    if verbose:
+        log_line("🔎 DEBUG: Pinging 8.8.8.8 to test internet connectivity...")
+
+    try:
+        ping_cmd = ["ping", "-n", "4", "8.8.8.8"] if current_os == "Windows" else ["ping", "-c", "4", "8.8.8.8"]
+        subprocess.check_output(ping_cmd, stderr=subprocess.STDOUT)
+        results.append(("Pinging 8.8.8.8", True, "Success\n      ↪ Internet is reachable via direct IP."))
+    except subprocess.CalledProcessError:
+        results.append(("Pinging 8.8.8.8", False, "Failed\n      ↪ Likely no internet access or outbound ICMP blocked."))
+
+    # 3. Ping google.com
+    if verbose:
+        log_line("🔎 DEBUG: Resolving DNS via google.com...")
+
+    try:
+        ping_cmd = ["ping", "-n", "4", "google.com"] if current_os == "Windows" else ["ping", "-c", "4", "google.com"]
+        subprocess.check_output(ping_cmd, stderr=subprocess.STDOUT)
+        results.append(("Pinging google.com", True, "Success\n      ↪ DNS is resolving properly."))
+    except subprocess.CalledProcessError:
+        results.append(("Pinging google.com", False, "Failed\n      ↪ DNS appears to be misconfigured or unreachable."))
+
+    # 4. Default gateway
+    if verbose:
+        log_line("🔎 DEBUG: Checking for default gateway...")
+
+    try:
+        if current_os == "Windows":
+            route_output = subprocess.check_output(["route", "print"], text=True)
+            if "0.0.0.0" in route_output:
+                # Extract gateway using regex or basic split (simple version below)
+                lines = route_output.splitlines()
+                for line in lines:
+                    if "0.0.0.0" in line and "." in line:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            gateway = parts[2]  # Windows: 0.0.0.0 0.0.0.0 <GATEWAY>
+                            break
+
+                results.append(("Checking default gateway", True, "Default route found in routing table."))
+            else:
+                results.append(("Checking default gateway", False, "No default route found."))
+        else:
+            route_output = subprocess.check_output(["ip", "route"], text=True)
+            default_line = [line for line in route_output.splitlines() if line.startswith("default")]
+            gateway = default_line[0].split()[2] if default_line else None
+            if gateway:
+                results.append(("Checking default gateway", True, f"Found: {gateway}"))
+            else:
+                results.append(("Checking default gateway", False, "No default gateway found."))
+    except Exception as e:
+        results.append(("Checking default gateway", False, f"Error: {str(e)}"))
+
+
+    # 5. Network service (Linux only)
+    if verbose and current_os == "Linux":
+        log_line("🔎 DEBUG: Checking NetworkManager status on Linux...")
+
+    if current_os == "Linux":
+        try:
+            service_status = subprocess.check_output(["systemctl", "is-active", "NetworkManager"], text=True).strip()
+            if service_status == "active":
+                results.append(("Checking network service", True, "NetworkManager is active"))
+            else:
+                results.append(("Checking network service", False, f"NetworkManager status: {service_status}"))
+        except subprocess.CalledProcessError:
+            results.append(("Checking network service", False, "NetworkManager is not running or systemd not available."))
+        except FileNotFoundError:
+            results.append(("Checking network service", False, "Systemctl not found – not a systemd-based distro?"))
+        else:
+            results.append(("Checking network service", True, "✅ Skipped (not applicable on Windows/macOS)"))
+
+    # 6. Ping default gateway (confirm local routing works)
+    if verbose:
+        log_line(f"🔎 DEBUG: Attempting to ping gateway at {gateway}...")
+
+    try:
+        if current_os == "Windows":
+            subprocess.check_output(["ping", "-n", "2", gateway], stderr=subprocess.STDOUT)
+        else:
+            subprocess.check_output(["ping", "-c", "2", gateway], stderr=subprocess.STDOUT)
+
+        message = "Success\n      ↪ Router/gateway is reachable."
+        log_line(f"✅ {message}")
+        results.append(("Pinging default gateway", True, message))
+
+    except subprocess.CalledProcessError:
+        message = "Failed\n      ↪ Your system cannot reach the router (gateway)."
+        log_line(f"❌ {message}")
+        results.append(("Pinging default gateway", False, message))
+
+    except Exception as e:
+        message = f"Error: {e}"
+        log_line(f"❌ {message}")
+        results.append(("Pinging default gateway", False, message))
+
+    # Print results
+    total = len(results)
+    for idx, (label, status, message) in enumerate(results, start=1):
+        icon = "✅" if status else "❌"
+        print(f"[{idx}/{total}] {label}... {icon} {message}")
+
+
+    # Simple summary
+    if results[1][1] and not results[2][1]:
+        log_line("🚨 Summary: Internet connection is working, but DNS resolution is failing.")
+        log_line("💡 Tip: Try switching to a public DNS like 1.1.1.1 or 8.8.8.8.\n")
+    elif not results[1][1]:
+        log_line("🚨 Summary: Your system cannot reach the internet.")
+        log_line("💡 Tip: Check your physical connection, Wi-Fi status, or router.\n")
+    else:
+        log_line("✅ Summary: Network looks good. You're online!\n")
+
+    # Write to log file if needed
+    if log:
+        with open(log_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(log_entries))
+        print(f"\n📝 Diagnostic log saved to: {log_file}")
+
+        print()
 
 def show_connections(keyword=None):
     print_section_title("Connection Interfaces")
@@ -364,6 +710,7 @@ def show_cpu_sockets(keyword=None):
         print(Fore.MAGENTA + "\n🧠 Memory Tricks:\n")
         for tip in CPU_TIPS:
             print(Fore.YELLOW + tip)
+
 def main():
     # Argument parser setup
     parser = argparse.ArgumentParser(
@@ -382,8 +729,24 @@ def main():
     parser.add_argument("-storage","--storage", action="store_true", help="Show storage technologies and interfaces")
     parser.add_argument("-ws", "--wifi-sec", action="store_true", help="Show wireless encryption types")
     parser.add_argument("-cpu","--cpu", action="store_true", help="Show CPU socket types and platforms")
+    parser.add_argument("-ip", "--iptable", action="store_true", help="Show common IP address ranges")
+    parser.add_argument("-calc", "--ipcalc", type=str, metavar="CIDR", help="Calculate subnet details from an IP/CIDR")
+    parser.add_argument("-d", "--diag", action="store_true", help="Run basic system diagnostics")
+    parser.add_argument("-l", "--log", action="store_true", help="Save diagnostic output to a log file")
+
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose diagnostic output"
+    )
 
     args = parser.parse_args()
+
+    from common.cli import run_diag  # if not already imported
+    if args.diag:
+        run_diag(verbose=args.verbose, log=args.log)
+
+        return
 
     # Main Logic
     if args.ports:
@@ -402,6 +765,10 @@ def main():
         show_storage(keyword=args.search)
     elif args.wifi_sec:
         show_wifi_security(keyword=args.search)
+    elif args.iptable:
+        show_ip_table(keyword=args.search)
+    elif args.ipcalc:
+        show_ip_calculator(args.ipcalc)  
     elif args.cpu:
         show_cpu_sockets(keyword=args.search)
     elif args.all:
@@ -431,12 +798,29 @@ def main():
         print_section_title("Wi-Fi Security")
         show_wifi_security(keyword=keyword)
 
+        print_section_title("IP Table")
+        show_ip_table(keyword=keyword)
+
+        print_section_title("IP Calc")
+        show_ip_calculator(keyword=keyword)
+
         print_section_title("CPU Sockets")
         show_cpu_sockets(keyword=keyword)
 
     else:
         parser.print_help()
+        print()
 
 
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Common CLI Tool – Diagnostic Mode")
+    parser.add_argument("-d", "--diag", action="store_true", help="Run basic system diagnostics")
+    parser.add_argument("-l", "--log", action="store_true", help="Save diagnostic output to a log file")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose diagnostic output")
+    args = parser.parse_args()
+
+    if args.diag:
+        run_diag(verbose=args.verbose, log=args.log)
+

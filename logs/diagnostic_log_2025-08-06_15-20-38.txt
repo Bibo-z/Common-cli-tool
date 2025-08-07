@@ -1,0 +1,26 @@
+[1/5] Checking IP address... ✅ Found IPv4 address in ipconfig
+
+🕒 Diagnostic run on 2025-08-06_15-20-38
+==================================================
+[2/5] Pinging 8.8.8.8... ✅ Success
+      ↪ Internet is reachable via direct IP.
+
+🕒 Diagnostic run on 2025-08-06_15-20-38
+==================================================
+[3/5] Pinging google.com... ✅ Success
+      ↪ DNS is resolving properly.
+
+🕒 Diagnostic run on 2025-08-06_15-20-38
+==================================================
+[4/5] Checking default gateway... ✅ Default route found in routing table.
+
+🕒 Diagnostic run on 2025-08-06_15-20-38
+==================================================
+[5/5] Checking network service... ✅ ✅ Skipped (not applicable on Windows/macOS)
+
+🕒 Diagnostic run on 2025-08-06_15-20-38
+==================================================
+✅ Summary: Network looks good. You're online!
+
+🕒 Diagnostic run on 2025-08-06_15-20-38
+==================================================

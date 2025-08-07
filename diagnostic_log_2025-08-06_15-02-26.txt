@@ -1,0 +1,13 @@
+[1/5] Checking IP address... ✅ Found IPv4 address in ipconfig
+
+[2/5] Pinging 8.8.8.8... ✅ Success
+      ↪ Internet is reachable via direct IP.
+
+[3/5] Pinging google.com... ✅ Success
+      ↪ DNS is resolving properly.
+
+[4/5] Checking default gateway... ✅ Default route found in routing table.
+
+[5/5] Checking network service... ✅ ✅ Skipped (not applicable on Windows/macOS)
+
+✅ Summary: Network looks good. You're online!
